@@ -7,10 +7,14 @@
     "⅛": 0.125, "⅜": 0.375, "⅝": 0.625, "⅞": 0.875
   };
   var FRACTION_CHARS = Object.keys(FRACTIONS).join("");
-  // Tried in order: a mixed number ("1 ½", where the space is genuinely part
-  // of the number and must be consumed), then a plain integer/decimal alone
-  // (leaving any following space in `rest`, e.g. "1 head" -> rest=" head"),
-  // then a bare fraction ("½ c").
+  // Tried in order: a numeric range ("4-5", "6–10"; both ends get scaled), a
+  // mixed ascii number ("1 1/2"), a bare ascii fraction ("1/2"), a mixed
+  // unicode number ("1 ½"), a plain integer/decimal, then a bare unicode
+  // fraction ("½ c"). Order matters — shorter patterns would otherwise match
+  // a prefix of a longer one and leave a dangling "-5" or "/2" in `rest`.
+  var RANGE_RE = /^(\s*~?\s*)(\d+(?:\.\d+)?)\s*[-–—]\s*(\d+(?:\.\d+)?)/;
+  var MIXED_ASCII_RE = /^(\s*~?\s*)(\d+)\s+(\d+)\/(\d+)/;
+  var ASCII_FRAC_RE = /^(\s*~?\s*)(\d+)\/(\d+)/;
   var MIXED_RE = new RegExp("^(\\s*~?\\s*)(\\d+)\\s+([" + FRACTION_CHARS + "])");
   var INT_RE = /^(\s*~?\s*)(\d+(?:\.\d+)?)/;
   var FRAC_RE = new RegExp("^(\\s*~?\\s*)([" + FRACTION_CHARS + "])");
@@ -20,19 +24,50 @@
   ];
 
   function parseQty(text) {
-    var m = text.match(MIXED_RE);
-    var value;
-    if (m) {
-      value = parseFloat(m[2]) + FRACTIONS[m[3]];
-    } else if ((m = text.match(INT_RE))) {
-      value = parseFloat(m[2]);
-    } else if ((m = text.match(FRAC_RE))) {
-      value = FRACTIONS[m[2]];
-    } else {
-      return null;
+    var m;
+    if ((m = text.match(RANGE_RE))) {
+      return {
+        type: "range", approx: m[1].indexOf("~") !== -1,
+        value1: parseFloat(m[2]), value2: parseFloat(m[3]),
+        rest: text.slice(m[0].length)
+      };
     }
-    if (!value) return null;
-    return { value: value, matchLen: m[0].length, rest: text.slice(m[0].length) };
+    if ((m = text.match(MIXED_ASCII_RE))) {
+      return {
+        type: "single", approx: m[1].indexOf("~") !== -1,
+        value: parseFloat(m[2]) + parseFloat(m[3]) / parseFloat(m[4]),
+        rest: text.slice(m[0].length)
+      };
+    }
+    if ((m = text.match(ASCII_FRAC_RE))) {
+      return {
+        type: "single", approx: m[1].indexOf("~") !== -1,
+        value: parseFloat(m[2]) / parseFloat(m[3]),
+        rest: text.slice(m[0].length)
+      };
+    }
+    if ((m = text.match(MIXED_RE))) {
+      return {
+        type: "single", approx: m[1].indexOf("~") !== -1,
+        value: parseFloat(m[2]) + FRACTIONS[m[3]],
+        rest: text.slice(m[0].length)
+      };
+    }
+    if ((m = text.match(INT_RE))) {
+      return {
+        type: "single", approx: m[1].indexOf("~") !== -1,
+        value: parseFloat(m[2]),
+        rest: text.slice(m[0].length)
+      };
+    }
+    if ((m = text.match(FRAC_RE))) {
+      return {
+        type: "single", approx: m[1].indexOf("~") !== -1,
+        value: FRACTIONS[m[2]],
+        rest: text.slice(m[0].length)
+      };
+    }
+    return null;
   }
 
   function formatQty(value) {
@@ -50,50 +85,79 @@
     return String(Math.round(value * 100) / 100);
   }
 
-  function findQuantityCells(table) {
-    var section = "";
-    var seenInstructions = false;
-    var cells = [];
-    Array.prototype.forEach.call(table.querySelectorAll("tr"), function (row) {
-      var tds = row.querySelectorAll("td");
-      if (tds.length === 1) {
-        if (tds[0].querySelector("b")) {
-          section = tds[0].textContent.toLowerCase();
-          if (section.indexOf("instruction") !== -1) seenInstructions = true;
-        }
-        return;
-      }
-      if (tds.length !== 2 || seenInstructions || section.indexOf("ingredient") === -1) return;
-      if (!tds[1].textContent.trim()) return;
-      var qty = parseQty(tds[0].textContent);
-      if (qty) cells.push({ cell: tds[0], original: tds[0].textContent, parsed: qty });
-    });
-    return cells;
+  function formatParsed(parsed, multiplier) {
+    var tilde = parsed.approx ? "~" : "";
+    if (parsed.type === "range") {
+      return tilde + formatQty(parsed.value1 * multiplier) + "-" +
+        formatQty(parsed.value2 * multiplier) + parsed.rest;
+    }
+    return tilde + formatQty(parsed.value * multiplier) + parsed.rest;
   }
 
-  function render(cells, multiplier) {
-    cells.forEach(function (c) {
-      if (multiplier === 1) {
-        c.cell.textContent = c.original;
-        return;
+  function firstMeaningfulTextNode(el) {
+    for (var i = 0; i < el.childNodes.length; i++) {
+      var node = el.childNodes[i];
+      if (node.nodeType === Node.TEXT_NODE && node.textContent.trim()) return node;
+    }
+    return null;
+  }
+
+  function findIngredientNodes() {
+    var out = [];
+    var paragraphs = document.querySelectorAll("p");
+    for (var i = 0; i < paragraphs.length; i++) {
+      if (!/^ingredient/i.test(paragraphs[i].textContent.trim())) continue;
+      var list = paragraphs[i].nextElementSibling;
+      if (!list || list.tagName !== "UL") continue;
+      var items = list.querySelectorAll("li");
+      for (var j = 0; j < items.length; j++) {
+        var label = items[j].querySelector("label");
+        if (!label) continue;
+        var textNode = firstMeaningfulTextNode(label);
+        if (!textNode || textNode.textContent.indexOf("·") !== -1) continue;
+        var qty = parseQty(textNode.textContent);
+        if (qty) out.push({ node: textNode, original: textNode.textContent, parsed: qty, gap: " " });
       }
-      c.cell.textContent = formatQty(c.parsed.value * multiplier) + c.parsed.rest;
+    }
+    return out;
+  }
+
+  function findYieldNode() {
+    var paragraphs = document.querySelectorAll("p");
+    for (var i = 0; i < paragraphs.length; i++) {
+      var m = paragraphs[i].textContent.match(/^(\s*yield:\s*)/i);
+      if (!m) continue;
+      var textNode = firstMeaningfulTextNode(paragraphs[i]);
+      if (!textNode) continue;
+      var rest = textNode.textContent.slice(m[1].length);
+      var qty = parseQty(rest);
+      if (qty) return { node: textNode, original: textNode.textContent, parsed: qty, gap: m[1] };
+    }
+    return null;
+  }
+
+  function render(nodes, multiplier) {
+    nodes.forEach(function (n) {
+      n.node.textContent = multiplier === 1
+        ? n.original
+        : n.gap + formatParsed(n.parsed, multiplier);
     });
   }
 
   document.addEventListener("DOMContentLoaded", function () {
-    var table = document.querySelector("table");
     var box = document.getElementById("scale-box");
-    if (!table || !box) return;
-    var cells = findQuantityCells(table);
-    if (!cells.length) {
+    if (!box) return;
+    var nodes = findIngredientNodes();
+    var yieldNode = findYieldNode();
+    if (yieldNode) nodes = nodes.concat([yieldNode]);
+    if (!nodes.length) {
       box.style.display = "none";
       return;
     }
 
     function setMultiplier(m) {
       if (!m || m <= 0) return;
-      render(cells, m);
+      render(nodes, m);
       Array.prototype.forEach.call(box.querySelectorAll("button"), function (btn) {
         btn.classList.toggle("active", parseFloat(btn.dataset.mult) === m);
       });
@@ -112,7 +176,7 @@
         Array.prototype.forEach.call(box.querySelectorAll("button"), function (btn) {
           btn.classList.remove("active");
         });
-        render(cells, m);
+        render(nodes, m);
       }
     });
   });
