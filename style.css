@@ -128,6 +128,31 @@ tr:nth-child(even) td {
   padding-top: 0.6rem;
 }
 
+.hint {
+  color: var(--color-subtle);
+  font-size: 0.875rem;
+}
+
+input[type="search"] {
+  width: 100%;
+  font: inherit;
+  color: var(--color-base);
+  background: var(--bg-neutral-subtle);
+  border: 1px solid var(--border-base);
+  border-radius: 2px;
+  padding: 0.5rem 0.7rem;
+}
+
+input[type="search"]:focus {
+  outline: 2px solid var(--link);
+  outline-offset: -1px;
+}
+
+.match-count {
+  color: var(--color-subtle);
+  font-size: 0.875rem;
+}
+
 @media (max-width: 30rem) {
   body {
     padding: 1rem 0.75rem 3rem;
