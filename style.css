@@ -120,3 +120,23 @@ th {
 tr:nth-child(even) td {
   background: var(--bg-neutral-subtle);
 }
+
+.tags {
+  color: var(--color-subtle);
+  font-size: 0.875rem;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 0.6rem;
+}
+
+@media (max-width: 30rem) {
+  body {
+    padding: 1rem 0.75rem 3rem;
+  }
+
+  th,
+  td {
+    padding: 0.35rem 0.45rem;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+}
