@@ -7,16 +7,30 @@
     "⅛": 0.125, "⅜": 0.375, "⅝": 0.625, "⅞": 0.875
   };
   var FRACTION_CHARS = Object.keys(FRACTIONS).join("");
-  var QTY_RE = new RegExp("^(\\s*~?\\s*)(\\d+)?\\s*([" + FRACTION_CHARS + "])?");
+  // Tried in order: a mixed number ("1 ½", where the space is genuinely part
+  // of the number and must be consumed), then a plain integer/decimal alone
+  // (leaving any following space in `rest`, e.g. "1 head" -> rest=" head"),
+  // then a bare fraction ("½ c").
+  var MIXED_RE = new RegExp("^(\\s*~?\\s*)(\\d+)\\s+([" + FRACTION_CHARS + "])");
+  var INT_RE = /^(\s*~?\s*)(\d+(?:\.\d+)?)/;
+  var FRAC_RE = new RegExp("^(\\s*~?\\s*)([" + FRACTION_CHARS + "])");
   var DISPLAY = [
     [0, ""], [0.125, "⅛"], [0.25, "¼"], [1 / 3, "⅓"], [0.375, "⅜"], [0.5, "½"],
     [0.625, "⅝"], [2 / 3, "⅔"], [0.75, "¾"], [0.875, "⅞"]
   ];
 
   function parseQty(text) {
-    var m = text.match(QTY_RE);
-    if (!m || (!m[2] && !m[3])) return null;
-    var value = (m[2] ? parseInt(m[2], 10) : 0) + (m[3] ? FRACTIONS[m[3]] : 0);
+    var m = text.match(MIXED_RE);
+    var value;
+    if (m) {
+      value = parseFloat(m[2]) + FRACTIONS[m[3]];
+    } else if ((m = text.match(INT_RE))) {
+      value = parseFloat(m[2]);
+    } else if ((m = text.match(FRAC_RE))) {
+      value = FRACTIONS[m[2]];
+    } else {
+      return null;
+    }
     if (!value) return null;
     return { value: value, matchLen: m[0].length, rest: text.slice(m[0].length) };
   }
