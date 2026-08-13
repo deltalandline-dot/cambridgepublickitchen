@@ -10,7 +10,10 @@
 <p><a href="index.html">All recipes</a></p>
 <h1>Search by ingredient</h1>
 <p class="hint">Type one or more ingredients, separated by commas (e.g. <em>lentil, garlic, ginger</em>). Recipes matching the most of them are listed first.</p>
+<div class="search-wrap">
 <input type="search" id="query" placeholder="lentil, garlic, ginger…" autocomplete="off">
+<ul id="suggestions"></ul>
+</div>
 <p id="status" class="hint"></p>
 <ul id="results"></ul>
 <script src="search.js"></script>

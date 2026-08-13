@@ -3,6 +3,7 @@
    shipped theme-wikimedia-ui-mode-dark.css), light mode as :root and
    dark mode under prefers-color-scheme, same as Wikipedia itself. */
 :root {
+  color-scheme: light dark;
   --color-base: #202122;
   --color-subtle: #54595d;
   --color-placeholder: #72777d;
@@ -133,7 +134,14 @@ tr:nth-child(even) td {
   font-size: 0.875rem;
 }
 
+.search-wrap {
+  position: relative;
+  max-width: 26rem;
+}
+
 input[type="search"] {
+  -webkit-appearance: none;
+  appearance: none;
   width: 100%;
   font: inherit;
   color: var(--color-base);
@@ -146,6 +154,35 @@ input[type="search"] {
 input[type="search"]:focus {
   outline: 2px solid var(--link);
   outline-offset: -1px;
+}
+
+#suggestions {
+  position: absolute;
+  z-index: 1;
+  left: 0;
+  right: 0;
+  margin: 0.15rem 0 0;
+  padding: 0;
+  list-style: none;
+  background: var(--bg-base);
+  border: 1px solid var(--border-base);
+  border-radius: 2px;
+}
+
+#suggestions:empty {
+  display: none;
+  border: none;
+}
+
+#suggestions li {
+  margin: 0;
+  padding: 0.4rem 0.7rem;
+  cursor: pointer;
+}
+
+#suggestions li:hover,
+#suggestions li.active {
+  background: var(--bg-neutral);
 }
 
 .match-count {
